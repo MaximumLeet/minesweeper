@@ -1,0 +1,327 @@
+<style>
+    .container {
+        cursor: default;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        & .gameBox {
+            border: 1px solid silver;
+            padding: 10px;
+            border-radius: 3px;
+            box-shadow: 0px 1px 5px 1px silver;
+            & .gameHeader {
+                display: grid;
+                grid-template-columns: 0.1fr 1fr 0.1fr;
+                border: 1px solid silver;
+                border-radius: 3px;
+                background-color: #eee;
+                padding: 5px;
+                margin-bottom: 10px;
+                & span {
+                    text-align: center;
+                    align-content: center;
+                    line-height: 1.5em;
+                }
+                & .headerBox {
+                    border: 2px solid gray;
+                    border-radius: 2px;
+                    font-size: large;
+                    background-color: #1e1e1e;
+                    color: lightgreen;
+                    font-family: system-ui;
+                }
+            }
+            & .gameMain {
+                border: 1px solid silver;
+                border-radius: 3px;
+                background-color: #1e1e1e;
+                & .gameCells {
+                    display: grid;
+                    grid-template-columns: repeat(30, 25px);
+                    grid-template-rows: repeat(16, 25px);
+                    grid-gap: 0.5px;
+                    & .cell {
+                        background-color: silver;
+                        border: 1px solid gray;
+                        transition: 0.2s;
+                        align-content: center;
+                        text-align: center;
+                        font-size: large;
+                        line-height: 1.4em;
+                    }
+                    & .cell:hover {
+                        background-color: darkgray;
+                        cursor: pointer;
+                    }
+                    & .cell.clicked {
+                        background-color: gray;
+                        border: 2px solid gray;
+                    }
+                    & .cell.flagged {
+                        color: red;
+                        align-content: center;
+                        text-align: center;
+                        font-size: 1.2em;
+                        font-family: system-ui;
+                        line-height: 10px;
+                        background-color: pink;
+                    }
+                }
+                & .gameCells.expert {
+                    grid-template-columns: repeat(30, 25px);
+                    grid-template-rows: repeat(16, 25px);
+                }
+                & .gameCells.hard {
+                    grid-template-columns: repeat(16, 25px);
+                    grid-template-rows: repeat(16, 25px);
+                }
+                & .gameCells.easy {
+                    grid-template-columns: repeat(9, 25px);
+                    grid-template-rows: repeat(9, 25px);
+                }
+            }
+        }
+    }
+    #win {
+        border: 1px solid silver;
+        border-radius: 3px;
+        padding: 20px;
+        font-size: xx-large;
+    }
+    [popover]::backdrop {
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(2px);
+    }
+    [popover]:popover-open {
+        opacity: 1;
+        transition: opacity 0.3s ease-out;
+    }
+</style>
+<div class="container">
+    <div class="gameBox">
+        <div class="gameHeader">
+            <span>
+                <div class="headerBox mineCount" id="mineCount"></div>
+            </span>
+            <span><button id="resetButton" onClick="startGame(modeSelect.selectedOptions[0].dataset.max, modeSelect.selectedOptions[0].dataset.size)">:D</button></span>
+            <span><div class="headerBox mineCount" id="timerBox"></div></span>
+        </div>
+        <div class="gameMain">
+            <div class="gameCells" id="gameCells">
+                
+            </div>
+        </div>
+        <div class="gameFooter">
+            <span>
+                <select id="modeSelect" onChange="startGame(this.selectedOptions[0].dataset.max, this.selectedOptions[0].dataset.size)">
+                    <option data-max="99" data-size="480">Expert</option>
+                    <option data-max="40" data-size="256">Hard</option>
+                    <option data-max="10" data-size="81">Easy</option>
+                </select>
+            </span>
+        </div>
+    </div>
+    
+</div>
+<div id="win" popover>
+    <span>You won!</span>
+    <span id="winTime">Final time: </span>
+</div>
+<script>
+    document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+    });
+    let initMinecount;
+    let mc;
+    let cells;
+    let nonMineCells;
+    var timerBox = document.getElementById('timerBox');
+    var timerCount = 0;
+    let timer;
+    function startGame(max, size) {
+        timerBox.textContent = '000';
+        timerCount = 0;
+        clearInterval(timer);
+        timer = setInterval(() => {
+            timerBox.textContent = String(timerCount).padStart(3, '0');
+            timerCount++;
+        }, 1000)
+        max = arguments.length? arguments[0] : 99;
+        size = arguments.length? arguments[1] : 480;
+        const i = init(max, size);
+        mc = i.mc;
+        cells = i.cells;
+        nonMineCells = i.nonMineCells;
+        updateMineCount(mc);
+    }
+    function init(max, size) {
+        if (document.querySelector('.cell')) {
+            document.querySelectorAll('.cell').forEach(c => c.remove());
+        }
+        var rowpos = 0;
+        var colpos = 0;
+        function setRowPos(maxRow, maxCol) {
+            if (colpos == 1) rowpos++;
+            return rowpos;
+        }
+        function setColPos(maxCol) {
+            colpos++;
+            if (maxCol+1 == colpos) {
+                colpos = 1;
+                return colpos;
+            }
+            return colpos;
+        }
+        let mineCount = max;
+        let gameCells = document.getElementById('gameCells');
+        gameCells.style.pointerEvents = 'auto';
+        gameCells.classList.remove('expert', 'hard', 'easy');
+        rows = (size == 480 || size == 256) ? 16 : 9;
+        cols = size == 480
+            ? 30
+            : size == 256
+                ? 16
+                : 9;
+        size == 480
+            ? gameCells.classList.add('expert')
+            : size == 256
+                ? gameCells.classList.add('hard')
+                : gameCells.classList.add('easy');
+        let bombCount = 0;
+        let cellArr = [];
+        for (let i = 1; i <= size; i++) {
+            let div = document.createElement('div');
+            div.setAttribute('data-id', i);
+            div.setAttribute('data-hasbomb', 'false');
+            div.setAttribute('data-colpos', `${setColPos(cols)}`);
+            div.setAttribute('data-rowpos', `${setRowPos(rows, cols)}`);
+            div.classList.add('cell');
+            gameCells.appendChild(div);
+            div.addEventListener('mousedown', function(e) {
+                handleCellClick(div, e);
+            })
+            cellArr.push(div);
+        }
+        while (bombCount < max) {
+            const index = Math.floor(Math.random() * cellArr.length);
+            const cell = cellArr[index];
+
+            if (cell.dataset.hasbomb === 'false') {
+                cell.dataset.hasbomb = 'true';
+                bombCount++;
+            }
+        }
+        updateMineCount(mineCount);
+        var allCells = Array.from(document.querySelectorAll('.cell'));
+        return {
+            "mc": mineCount,
+            "cells": allCells,
+            "nonMineCells": Array.from(document.querySelectorAll('.cell')).filter(i => i.dataset.hasbomb === 'false')
+        }
+    }
+    startGame();
+
+    function handleCellClick(div, e) {
+        if (e.buttons == 2 && !div.classList.contains('flagged')) {
+            div.classList.add('flagged');
+            div.innerHTML = '&#128681';
+            updateMineCount(mc);
+            return;
+        } else if (e.buttons == 2 && div.classList.contains('flagged')) {
+            div.classList.remove('flagged');
+            div.innerHTML = ' ';
+            updateMineCount(mc);
+            return;
+        }
+        if (e.buttons == 1 && div.classList.contains('flagged')) return;
+        const count = getNearCount(div);
+        if (count == 0) floodFill(div);
+        div.classList.add('clicked');
+        checkWin();
+        if (div.dataset.hasbomb == 'true') fail();
+    }
+    function getNearCount(div) {
+        
+        var textColors = {
+            0: 'transparent',
+            1: 'lightblue',
+            2: 'lightgreen',
+            3: 'red',
+            4: 'fuchsia',
+            5: 'orange',
+            6: 'brown',
+            7: 'yellow',
+            8: 'black'
+        }
+
+        const neighbors = getNeighbors(div);
+        
+        var areaCount = 0;
+        neighbors.forEach((c) => {
+            if (c != 0 && c.dataset.hasbomb == 'true') areaCount++;
+        })
+        div.style.color = textColors[areaCount];
+        div.textContent = areaCount == 0? "" : areaCount;
+        return areaCount;
+    }
+    function getNeighbors(div) {
+        var currentRow = parseInt(div.dataset.rowpos);
+        var currentCol = parseInt(div.dataset.colpos);
+        var posArr = [
+            cells.filter(c => c.dataset.rowpos == currentRow - 1 && c.dataset.colpos == currentCol)[0] ?? 0,
+            cells.filter(c => c.dataset.rowpos == currentRow - 1 && c.dataset.colpos == currentCol - 1)[0] ?? 0,
+            cells.filter(c => c.dataset.rowpos == currentRow - 1 && c.dataset.colpos == currentCol + 1)[0] ?? 0,
+            cells.filter(c => c.dataset.rowpos == currentRow + 1 && c.dataset.colpos == currentCol)[0] ?? 0,
+            cells.filter(c => c.dataset.rowpos == currentRow + 1 && c.dataset.colpos == currentCol - 1)[0] ?? 0,
+            cells.filter(c => c.dataset.rowpos == currentRow + 1 && c.dataset.colpos == currentCol + 1)[0] ?? 0,
+            cells.filter(c => c.dataset.colpos == currentCol - 1 && c.dataset.rowpos == currentRow)[0] ?? 0,
+            cells.filter(c => c.dataset.colpos == currentCol + 1 && c.dataset.rowpos == currentRow)[0] ?? 0
+        ];
+        return posArr;
+    }
+    function floodFill(startCell) {
+        const queue = [startCell];
+        while (queue.length > 0) {
+            const cell = queue.pop();
+            if (cell.dataset.hasbomb === 'true' || cell.classList.contains('flagged') || cell.classList.contains('clicked')) {
+                continue
+            };
+            if (!cell.classList.contains('clicked')) cell.classList.add('clicked');
+            const count = getNearCount(cell);
+            if (count > 0) continue;
+            if (count == 0) {
+                const neighbors = getNeighbors(cell);
+                neighbors.forEach((i) => {
+                    if (i != 0) queue.push(i)
+                })
+            }
+        }
+    }
+    function updateMineCount(mc) {
+        let assumedMines = Array.from(document.querySelectorAll('.cell')).filter(i => i.classList.contains('flagged')).length;
+        if (!assumedMines) assumedMines = 0;
+        document.getElementById('mineCount').textContent = mc - assumedMines;
+    }
+    function fail() {
+        clearInterval(timer);
+        let gameCells = document.getElementById('gameCells');
+        gameCells.style.pointerEvents = 'none';
+        Array.from(document.querySelectorAll('.cell')).filter(i => i.dataset.hasbomb == "true").forEach((b) => {
+            b.innerHTML = '&#128163;';
+            b.style.backgroundColor = '#df4747'
+        })
+    }
+    function win() {
+        clearInterval(timer);
+        let gameCells = document.getElementById('gameCells');
+        gameCells.style.pointerEvents = 'none';
+        dateObj = new Date(timerCount * 1000);
+        minutes = dateObj.getUTCMinutes();
+        seconds = dateObj.getSeconds();
+        document.getElementById('winTime').textContent = `Final Time: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        document.getElementById('win').togglePopover();
+    }
+    function checkWin() {
+        if (nonMineCells.filter(i => i.classList.contains('clicked')).length == nonMineCells.length) win();
+    }
+</script>
